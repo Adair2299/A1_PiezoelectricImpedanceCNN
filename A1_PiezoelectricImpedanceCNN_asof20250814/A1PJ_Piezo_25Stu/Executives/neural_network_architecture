@@ -1,0 +1,30 @@
+// Neural Network Architecture
+digraph {
+	A [label="Input Data (2496x1)"]
+	B [label="Conv1D: filters=128, kernel=7, activation=ReLU"]
+	C [label="MaxPooling1D: pool_size=2"]
+	D [label="Residual Block
+Conv1D, LayerNorm, Dropout"]
+	E [label="Channel Attention"]
+	F [label="Temporal Attention"]
+	G [label=GlobalAveragePooling1D]
+	H [label="Dense: 64 units, activation=ReLU"]
+	I [label="Dropout: 0.3"]
+	J [label="Output: Dense(1)"]
+	L [label="Residual Block
+Conv1D, LayerNorm, Dropout"]
+	A -> B
+	B -> C
+	C -> D
+	D -> E
+	E -> F
+	F -> G
+	G -> H
+	H -> I
+	I -> J
+	D -> L
+	L -> F
+	color=blue style=dotted
+	D -> E
+	E -> F
+}

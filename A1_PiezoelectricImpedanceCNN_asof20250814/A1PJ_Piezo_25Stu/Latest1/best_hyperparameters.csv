@@ -1,0 +1,2 @@
+kernel_size,n_residual_blocks,initial_pool_size,residual_pool_size,use_layer_norm,use_dropout
+7,1,4,4,True,True

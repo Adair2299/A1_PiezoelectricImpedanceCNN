@@ -1,0 +1,371 @@
+# 04月27日可行,06月07日可行，基于004普通神经网络的改进预测massloss
+# 1-500频谱，60天的， 四个周期全部
+# 没用6号钢板，只用58组
+
+
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_absolute_error
+import pandas as pd
+from pathlib import Path
+from tensorflow.keras.layers import Input, Conv1D, Dense, Flatten, Dropout, MaxPooling1D, LayerNormalization, Add, \
+    GlobalAveragePooling1D, Multiply, Permute, Reshape
+from tensorflow.keras.models import Model
+import tensorflow as tf
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+from scipy.ndimage import gaussian_filter1d
+from matplotlib import rcParams
+
+matplotlib.use('Qt5Agg')  # 解决plt警告
+
+# # ------------识别文件1：质量损失------------
+# # 指定路径和文件
+# folder = Path(r"E:\01我的\大三下(202501-202508)\大创-压电阻抗\数据分析\数据操作")
+# file = "3_sasq和质量损失率.xlsx"
+#
+# # 构建安全路径（自动处理操作系统差异）
+# file_path = folder / file
+#
+# # 检查文件是否存在
+# if not file_path.exists():
+#     raise FileNotFoundError(f"文件不存在: {file_path}")
+#
+# # 读取Excel数据
+# # 读取 B16:AE16 和 B24:AE24 两行数据
+# df1 = pd.read_excel(file_path, header=None, skiprows=15, nrows=1, usecols=range(1, 31))
+#
+# # 读取第二组数据(B24:AE24)
+# df2 = pd.read_excel(file_path, header=None, skiprows=23, nrows=1, usecols=range(1, 31))
+# df3 = pd.read_excel(file_path, header=None, skiprows=31, nrows=1, usecols=range(1, 31))
+# df4 = pd.read_excel(file_path, header=None, skiprows=39, nrows=1, usecols=range(1, 31))
+#
+# # 合并两个DataFrame
+# result = pd.concat([df1, df2, df3, df4], ignore_index=True)
+# result = np.array(result)
+# result = np.delete(result, 5, axis=1) # 6号钢板数据不要
+# mass_loss_rate = result.reshape(-1, 1)
+#
+#
+# # ---------识别文件2：阻抗谱 Piezoelectric Impedance Spectrum---------
+#
+# # 定义文件路径
+#
+#
+# # 文件路径
+# file_path = Path(r"E:\01我的\大三下(202501-202508)\大创-压电阻抗\14天阻抗汇总\Term all 1-500.xlsx")
+# # file_path = Path(r"E:\01我的\大三下(202501-202508)\大创-压电阻抗\14天阻抗汇总\Term all 1-500 GaussianSmoothed Sigma10.xlsx")
+#
+# # 精确读取 B2:DM2497
+# try:
+#     df = pd.read_excel(file_path, usecols="B:DM", header=None, skiprows=1, nrows=2496)
+#     print(f"成功读取，形状为: {df.shape}")  # 应该是 (2496, 117)
+#
+# except Exception as e:
+#     print(f"读取失败: {e}")
+#
+# Imp1_500_Orgl = df.values
+# print(f"最终数组形状: {Imp1_500_Orgl.shape}")  # 应该是(2496, 116)
+#
+# Imp1_500 = np.array(Imp1_500_Orgl)
+#
+
+# 加载数据
+
+
+Imp1_500 = np.load('../Latest1/Imp1_500.npy')  # (2496,116)
+mass_loss_rate = np.load('../Latest1/mass_loss_rate.npy')
+
+# 局部方差自适应
+from FunA_Adapt_Smoothing import adaptive_smooth
+
+Imp1_500 = adaptive_smooth(Imp1_500, base_sigma=20, window=50, alpha=25)
+
+# plt.plot(Imp1_500[:, 84], label='Origin', alpha=0.5)
+# plt.plot(Imp1_500_smooth[:, 84], label='Adaptive Smoothed', linewidth=2)
+# plt.legend()
+# plt.title('第1列阻抗谱：自适应平滑效果')
+# plt.show()
+
+# Imp1_500 = gaussian_filter(Imp1_500, sigma=[15,0]) # 简单平滑
+
+# --------打乱--------
+# 生成相同的随机排列索引
+np.random.seed(2)  # 可选：设置随机种子（保证结果可复现）
+shuffled_indices = np.random.permutation(len(mass_loss_rate))
+
+# 使用相同的索引打乱两个矩阵
+mass_loss_rate = mass_loss_rate[shuffled_indices]
+Imp1_500 = Imp1_500[shuffled_indices]
+
+##########################################################
+# --------------------- 第1步：整理数据 -------------------
+
+
+sequence_length = Imp1_500.shape[1]  # 用2496个点预测mass_loss
+
+X = np.array(Imp1_500)  # 阻抗数据
+y = np.array(mass_loss_rate)  # 质量损失
+
+# **修改点：仅标准化 X，y 直接保持物理值**
+X_mean, X_std = X.mean(), X.std()
+X = (X - X_mean) / X_std  # 标准化 X
+# y 保持原始尺度 (y 的单位是质量损失，不能归一化)
+
+# **严格按时间顺序划分数据集**
+split_time = int(0.7 * len(X))  # 70% 训练
+X_train, X_remaining = X[:split_time], X[split_time:]
+y_train, y_remaining = y[:split_time], y[split_time:]
+X_val, X_test = X_remaining[:len(X_remaining) // 2], X_remaining[len(X_remaining) // 2:]  # 15% 验证, 15% 测试
+y_val, y_test = y_remaining[:len(y_remaining) // 2], y_remaining[len(y_remaining) // 2:]
+
+# **转换为3D格式** [样本数, 时间步, 特征]
+X_train = X_train.reshape(-1, sequence_length, 1)
+X_val = X_val.reshape(-1, sequence_length, 1)
+X_test = X_test.reshape(-1, sequence_length, 1)
+
+
+# --------------------- 第2步：构建容易过拟合的模型 --------------------
+# model = Sequential([
+#     Conv1D(32, 4, activation='relu', input_shape=(sequence_length, 1)),
+#     Conv1D(16, 2, activation='relu'),
+#     Flatten(),
+#     Dense(8, activation='relu'),
+#     Dense(1)  # 直接预测质量损失
+# ])
+
+
+def ChannelAttention(input_tensor, reduction_ratio=8):
+    channel = input_tensor.shape[-1]
+    avg_pool = tf.reduce_mean(input_tensor, axis=1, keepdims=True)
+    dense = Dense(channel // reduction_ratio, activation='relu')(avg_pool)
+    dense = Dense(channel, activation='sigmoid')(dense)
+    return Multiply()([input_tensor, dense])
+
+
+def TemporalAttention(input_tensor):
+    permuted = Permute((2, 1))(input_tensor)  # [B, C, T]
+    dense = Dense(input_tensor.shape[1], activation='softmax')(permuted)
+    attention = Permute((2, 1))(dense)  # [B, T, C]
+    return Multiply()([input_tensor, attention])
+
+
+def residual_block(x, filters, kernel_size, pooling=True):
+    shortcut = x
+    x = Conv1D(filters, kernel_size, padding='same', activation='relu')(x)
+    x = LayerNormalization()(x)
+    x = Dropout(0.2)(x)
+    x = Conv1D(filters, kernel_size, padding='same')(x)
+    x = Add()([shortcut, x])
+    x = LayerNormalization()(x)
+    if pooling:
+        x = MaxPooling1D(pool_size=2)(x)
+    return x
+
+
+def build_advanced_model(input_length):
+    inputs = Input(shape=(input_length, 1))
+
+    # Initial Conv
+    x = Conv1D(128, 7, activation='relu', padding='same')(inputs)
+    # x = Conv1D(64, 7, activation='relu', padding='same')(inputs)
+    x = MaxPooling1D(pool_size=3)(x)
+
+    # Residual Blocks
+    x = residual_block(x, 128, 3)
+    # x = residual_block(x, 64, 3)
+
+    # Attention Mechanisms
+    x = ChannelAttention(x)
+    x = TemporalAttention(x)
+
+    # Decoder-like Flatten + FC
+    x = GlobalAveragePooling1D()(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dense(64, activation='relu')(x)
+    # x = Dense(64, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    outputs = Dense(1)(x)
+
+    model = Model(inputs, outputs)
+    return model
+
+
+"""
+def residual_block(x, filters, kernel_size, pooling=True, pool_size=4):  # 修改pool_size为4
+    shortcut = x
+    # 添加shortcut维度匹配
+    if shortcut.shape[-1] != filters:
+        shortcut = Conv1D(filters, 1, padding='same')(shortcut)
+
+    x = Conv1D(filters, kernel_size, padding='same', activation='relu')(x)
+    x = LayerNormalization()(x)  # 保持LayerNorm
+    x = Dropout(0.2)(x)  # 保持Dropout
+    x = Conv1D(filters, kernel_size, padding='same')(x)
+    x = Add()([shortcut, x])
+    x = LayerNormalization()(x)
+    if pooling and x.shape[1] // pool_size >= 1:  # 添加尺寸检查
+        x = MaxPooling1D(pool_size=pool_size)(x)  # 使用优化后的pool_size
+    return x
+
+def build_advanced_model(input_length):
+    inputs = Input(shape=(input_length, 1))
+
+    # Initial Conv - 使用优化参数
+    x = Conv1D(64, 7, activation='relu', padding='same')(inputs)  # kernel_size=7
+    x = MaxPooling1D(pool_size=4)(x)  # initial_pool_size=4
+
+    # Residual Blocks - 使用1个块(n_residual_blocks=1)
+    x = residual_block(x, 64, 7, pooling=False)  # kernel_size=7, 最后一个块不池化
+
+    # Attention Mechanisms
+    x = ChannelAttention(x)
+    x = TemporalAttention(x)
+
+    # Decoder-like Flatten + FC
+    x = GlobalAveragePooling1D()(x)
+    x = Dense(64, activation='relu')(x)
+    x = Dropout(0.3)(x)  # dropout_rate=0.3
+    outputs = Dense(1)(x)
+
+    model = Model(inputs, outputs)
+    return model
+"""
+
+model = build_advanced_model(sequence_length)
+
+# 1. 定义优化器和回调
+optimizer = Adam(learning_rate=0.001)  # 初始学习率
+lr_scheduler = ReduceLROnPlateau(
+    monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6, verbose=1
+)
+early_stop = EarlyStopping(
+    monitor='val_loss', patience=5, restore_best_weights=True, verbose=1
+)
+callbacks = [lr_scheduler, early_stop]  # 组合回调
+
+# 2. 编译模型（替换原有编译代码）
+model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])  # 增加MAE监控
+model.summary()
+
+# --------------------- 第3步：训练并监控过拟合 --------------------
+history = model.fit(
+    X_train, y_train,
+    epochs=500,  # 迭代次数
+    batch_size=12,  # 一次用几个训练
+    validation_data=(X_val, y_val),
+    verbose=1  # 进度条
+)
+
+
+# --------------------- 第4步：测试集评估 --------------------
+
+# 模型预测
+y_test_pred = model.predict(X_test).squeeze()
+y_train_pred = model.predict(X_train).squeeze()
+
+# 计算误差
+train_mae = mean_absolute_error(y_train.squeeze(), y_train_pred)
+test_mae = mean_absolute_error(y_test.squeeze(), y_test_pred)
+test_absolute_errors = np.abs(y_test.squeeze() - y_test_pred.squeeze())
+epsilon = 1e-10
+test_relative_errors = np.abs((y_test.squeeze() - y_test_pred.squeeze()) / (y_test.squeeze() + epsilon)) * 100
+
+
+
+from datetime import datetime
+from matplotlib.gridspec import GridSpec
+
+
+# --------------------- 生成时间戳 --------------------
+current_time = datetime.now().strftime("%Y%m%d%H%M%S")  # 格式如：20250808223405
+model_folder_name = f"完整模型{current_time}"
+
+# --------------------- 打印性能报告 --------------------
+performance_report = f'''
+=== Performance Report ===
+
+Training samples: {len(y_train)}, Test samples: {len(y_test)}
+Training MAE: {train_mae:.4f}
+Test MAE: {test_mae:.4f}
+Error increase: {((test_mae - train_mae) / train_mae) * 100:.1f}%
+
+--- Detailed Test Set Analysis ---
+
+Absolute error range: [{np.min(test_absolute_errors):.4f}, {np.max(test_absolute_errors):.4f}]
+Mean absolute error: {np.mean(test_absolute_errors):.4f}
+
+Relative error range: [{np.min(test_relative_errors):.2f}%, {np.max(test_relative_errors):.2f}%]
+Mean relative error: {np.mean(test_relative_errors):.2f}%
+'''
+
+print(performance_report)
+
+# --------------------- 绘图设置 --------------------
+# 设置全局字体为Times New Roman
+rcParams['font.family'] = 'Times New Roman'
+rcParams['font.size'] = 10
+
+
+# --------------------- 保存高分辨率图像 --------------------
+output_folder = Path(r"E:\01我的\大三下(202501-202508)\大创-压电阻抗\论文材料\消融研究") / model_folder_name
+
+# 确保输出目录存在
+output_folder.mkdir(parents=True, exist_ok=True)
+
+# 1. 保存训练过程图
+plt.figure(figsize=(5, 5))
+plt.plot(history.history['loss'], label='Training Loss', linewidth=0.5)
+plt.plot(history.history['val_loss'], label='Validation Loss', linewidth=0.5)
+plt.title('Training Process')
+plt.xlabel('Epoch')
+plt.ylabel('MSE')
+plt.legend()
+plt.savefig(output_folder / "training_process.png", dpi=600, bbox_inches='tight')
+plt.close()  # 关闭图形，避免重叠
+
+# 2. 保存预测对比和误差图
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 4), sharex=True)
+
+# 子图1：真实值 vs 预测值
+sample_numbers = np.arange(1, len(y_test) + 1)
+ax1.plot(sample_numbers, y_test * 100, 'bo-', label='True Value', markersize=4, linewidth=0.5)
+ax1.plot(sample_numbers, y_test_pred * 100, 'rx--', label='Predicted Value', markersize=4, linewidth=0.5)
+ax1.set_title('Test Set Prediction Comparison', fontweight='bold')
+ax1.set_ylabel('Mass Loss Rate (%)')
+ax1.legend()
+ax1.grid(True)
+ax1.set_ylim(0, 25)
+ax1.set_xlim(0.5, len(y_test) + 0.5)
+
+# 子图2：绝对误差
+ax2.bar(sample_numbers, test_absolute_errors * 100, color='orange', alpha=0.7,
+       label='Absolute Error', width=0.6)
+ax2.set_title('Absolute Errors', fontweight='bold')
+ax2.set_xlabel('Sample Number')
+ax2.set_ylabel('Absolute Error (%)')
+ax2.legend()
+ax2.grid(True)
+
+plt.tight_layout()
+plt.savefig(output_folder / "prediction_comparison.png", dpi=600, bbox_inches='tight')
+plt.close()  # 关闭图形
+
+# 3. 保存性能报告为图片
+fig = plt.figure(figsize=(8, 6))
+gs = GridSpec(1, 1, figure=fig)
+ax = fig.add_subplot(gs[0, 0])
+
+# 隐藏坐标轴
+ax.axis('off')
+
+# 添加文本
+ax.text(0.1, 0.9, 'Model Performance Report', fontsize=14, fontweight='bold')
+ax.text(0.1, 0.8, performance_report, fontsize=10, va='top', ha='left')
+
+plt.tight_layout()
+plt.savefig(output_folder / "performance_report.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+print(f"图像已保存至: {output_folder}")
