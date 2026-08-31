@@ -26,6 +26,42 @@ The `115d1a` implementation contains the main training and final-output pipeline
 
 Other files in this directory document individual experiments and attempts made during model development.
 
+## Attention Mechanism under Noisy Impedance Signals
+
+This implementation investigates the effectiveness of an **attention mechanism for corrosion quantification from noisy piezoelectric impedance signals**. When noise is introduced, different frequency regions may contain substantially different levels of useful information. The attention mechanism therefore enables the model to **automatically assign different weights to different frequency segments**, emphasizing informative regions while reducing the influence of less informative or noise-dominated components.
+
+The introduction of attention resulted in a **significant improvement in prediction accuracy**, as demonstrated by the comparison below.
+
+### Prediction Results with Attention
+
+<img width="300" height="300" alt="training_process" src="https://github.com/user-attachments/assets/91eb2bd0-40cd-439e-9d2f-10f0bf19599f" />
+<img width="600" height="300" alt="prediction_comparison" src="https://github.com/user-attachments/assets/96c7077f-52dd-4391-a551-dffe65ec8eee" />
+
+
+### Prediction Results with Attention Removed
+
+<img width="300" height="300" alt="training_process 1" src="https://github.com/user-attachments/assets/489ff788-9f48-4138-98ce-7a37d80f399f" />
+<img width="600" height="300" alt="prediction_comparison 1" src="https://github.com/user-attachments/assets/ebd45e7c-75d8-4424-a354-f0e3350b7990" />
+
+
+
+| Model                 | Absolute Error Range | Average Absolute Error | Relative Error Range | Average Relative Error |
+| --------------------- | -------------------: | ---------------------: | -------------------: | ---------------------: |
+| Hydro-AdaptNet    |     [0.0001, 0.0147] |             0.0026 |      [0.08%, 12.94%] |              2.98% |
+| Attention Removed |     [0.0014, 0.0954] |             0.0229 |     [1.84%, 163.85%] |             34.10% |
+
+### Attention Weight Analysis
+
+The visualization of attention weights demonstrates that the model successfully **learns to automatically distribute attention across different frequency regions** rather than treating all signal segments equally.
+
+<img width="400" height="400" alt="Original Signal 9 " src="https://github.com/user-attachments/assets/b099daf4-2fc7-4298-b62f-751476e53cc6" />
+<img width="400" height="400" alt="Attention Patterns for First 48 Test Samples" src="https://github.com/user-attachments/assets/436cfd0b-ea41-446c-86bc-71479c53d594" />
+
+
+
+To generalize, these results suggest that different segments within a signal may contain varying levels of information. From my perspective, this indicates that attention mechanisms may provide a useful way to identify and emphasize potentially more informative signal regions, which could contribute to improved prediction accuracy, particularly under noisy conditions.
+
+
 ## Notes on the Code
 
 This repository is not intended to represent a fully packaged or production-ready software project. It is primarily a record of personal research, learning, and experimentation.
