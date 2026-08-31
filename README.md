@@ -34,14 +34,14 @@ The introduction of attention resulted in a **significant improvement in predict
 
 ### Prediction Results with Attention
 
-<img width="300" height="300" alt="training_process" src="https://github.com/user-attachments/assets/91eb2bd0-40cd-439e-9d2f-10f0bf19599f" />
-<img width="600" height="300" alt="prediction_comparison" src="https://github.com/user-attachments/assets/96c7077f-52dd-4391-a551-dffe65ec8eee" />
+<img width="250" height="250" alt="training_process" src="https://github.com/user-attachments/assets/91eb2bd0-40cd-439e-9d2f-10f0bf19599f" />
+<img width="500" height="250" alt="prediction_comparison" src="https://github.com/user-attachments/assets/96c7077f-52dd-4391-a551-dffe65ec8eee" />
 
 
 ### Prediction Results with Attention Removed
 
-<img width="300" height="300" alt="training_process 1" src="https://github.com/user-attachments/assets/489ff788-9f48-4138-98ce-7a37d80f399f" />
-<img width="600" height="300" alt="prediction_comparison 1" src="https://github.com/user-attachments/assets/ebd45e7c-75d8-4424-a354-f0e3350b7990" />
+<img width="250" height="250" alt="training_process 1" src="https://github.com/user-attachments/assets/489ff788-9f48-4138-98ce-7a37d80f399f" />
+<img width="500" height="250" alt="prediction_comparison 1" src="https://github.com/user-attachments/assets/ebd45e7c-75d8-4424-a354-f0e3350b7990" />
 
 
 
@@ -54,8 +54,8 @@ The introduction of attention resulted in a **significant improvement in predict
 
 The visualization of attention weights demonstrates that the model successfully **learns to automatically distribute attention across different frequency regions** rather than treating all signal segments equally.
 
-<img width="400" height="400" alt="Original Signal 9 " src="https://github.com/user-attachments/assets/b099daf4-2fc7-4298-b62f-751476e53cc6" />
-<img width="400" height="400" alt="Attention Patterns for First 48 Test Samples" src="https://github.com/user-attachments/assets/436cfd0b-ea41-446c-86bc-71479c53d594" />
+<img width="375" height="375" alt="Original Signal 9 " src="https://github.com/user-attachments/assets/b099daf4-2fc7-4298-b62f-751476e53cc6" />
+<img width="375" height="375" alt="Attention Patterns for First 48 Test Samples" src="https://github.com/user-attachments/assets/436cfd0b-ea41-446c-86bc-71479c53d594" />
 
 
 
