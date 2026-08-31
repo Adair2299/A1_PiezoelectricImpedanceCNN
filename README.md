@@ -47,7 +47,7 @@ The introduction of attention resulted in a **significant improvement in predict
 
 | Model                 | Absolute Error Range | Average Absolute Error | Relative Error Range | Average Relative Error |
 | --------------------- | -------------------: | ---------------------: | -------------------: | ---------------------: |
-| Hydro-AdaptNet    |     [0.0001, 0.0147] |             0.0026 |      [0.08%, 12.94%] |              2.98% |
+| With Attention    |     [0.0001, 0.0147] |             0.0026 |      [0.08%, 12.94%] |              2.98% |
 | Attention Removed |     [0.0014, 0.0954] |             0.0229 |     [1.84%, 163.85%] |             34.10% |
 
 ### Attention Weight Analysis
